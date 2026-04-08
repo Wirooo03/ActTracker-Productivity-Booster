@@ -348,10 +348,10 @@ export default function WinMilestonePage() {
 	}
 
 	return (
-		<main className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937_0%,_#0b0b0b_42%,_#040404_100%)] px-3 py-4 text-zinc-100 sm:px-8 sm:py-10">
-			<section className="mx-auto flex w-full max-w-5xl flex-col gap-4 [font-family:var(--font-geist-sans)] sm:gap-5">
-				<header className="rounded-3xl border border-zinc-700/70 bg-zinc-900/80 p-4 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.85)] backdrop-blur sm:p-5">
-					<div className="flex flex-wrap items-start justify-between gap-4">
+		<main className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937_0%,_#0b0b0b_42%,_#040404_100%)] px-2.5 py-3 text-zinc-100 sm:px-5 sm:py-5">
+			<section className="mx-auto flex w-full max-w-5xl flex-col gap-3 [font-family:var(--font-geist-sans)] sm:gap-4">
+				<header className="rounded-3xl border border-zinc-700/70 bg-zinc-900/80 p-3 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.85)] backdrop-blur sm:p-4">
+					<div className="flex flex-wrap items-start justify-between gap-3">
 						<div className="flex min-w-0 items-start gap-3">
 							<Link
 								href="/me/win"
@@ -372,7 +372,7 @@ export default function WinMilestonePage() {
 							</div>
 						</div>
 
-						<div className="w-full rounded-2xl border border-cyan-700/60 bg-cyan-950/50 px-4 py-3 text-left sm:w-auto sm:text-right">
+						<div className="w-full rounded-2xl border border-cyan-700/60 bg-cyan-950/50 px-3 py-2.5 text-left sm:w-auto sm:text-right">
 							<p className="text-xs uppercase tracking-wide text-cyan-200/75">Ringkasan data</p>
 							<p className="text-base font-semibold text-cyan-100 sm:text-lg">
 								{tags.length} tag / {dateKeys.length} tanggal
@@ -380,7 +380,7 @@ export default function WinMilestonePage() {
 						</div>
 					</div>
 
-					<div className="mt-4 hidden flex-wrap items-center gap-2 text-xs text-zinc-400 sm:flex sm:text-sm">
+					<div className="mt-3 hidden flex-wrap items-center gap-2 text-xs text-zinc-400 sm:flex sm:text-sm">
 						<span className="rounded-full border border-zinc-700 bg-zinc-800/70 px-3 py-1">Dashboard</span>
 						<span>/</span>
 						<span className="rounded-full border border-zinc-700 bg-zinc-800/70 px-3 py-1">Perkembangan Harian</span>
@@ -389,20 +389,7 @@ export default function WinMilestonePage() {
 					</div>
 				</header>
 
-				<section className="rounded-3xl border border-zinc-700/70 bg-zinc-900/80 p-4 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.85)] backdrop-blur sm:p-5">
-					<div className="flex flex-wrap items-center justify-between gap-3">
-						<p className="text-xs text-zinc-400 sm:text-sm">
-							Simbol: cek = poin positif, silang = poin negatif, angka = value tag, ? = tag tidak ada.
-						</p>
-						<button
-							type="button"
-							onClick={refreshData}
-							className="rounded-xl border border-zinc-700 bg-zinc-800/80 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-700"
-						>
-							Refresh
-						</button>
-					</div>
-
+				<section className="rounded-3xl border border-zinc-700/70 bg-zinc-900/80 p-3 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.85)] backdrop-blur sm:p-4">
 					<div className="mt-3 flex flex-wrap items-center justify-between gap-3">
 						<div className="flex items-center gap-2">
 							<button
@@ -425,16 +412,14 @@ export default function WinMilestonePage() {
 								&gt;
 							</button>
 						</div>
-
-						<p className="text-xs text-zinc-400 sm:text-sm">Tanggal terbaru ditampilkan di sisi kiri.</p>
 					</div>
 
 					{loadErrors.length > 0 ? (
-						<div className="mt-3 space-y-2">
+						<div className="mt-2.5 space-y-2">
 							{loadErrors.map((error, index) => (
 								<div
 									key={`milestone-error-${index}`}
-									className="rounded-xl border border-amber-700/70 bg-amber-900/30 p-4 text-sm text-amber-200"
+									className="rounded-xl border border-amber-700/70 bg-amber-900/30 p-3 text-sm text-amber-200"
 								>
 									<p>{error}</p>
 								</div>
@@ -442,7 +427,7 @@ export default function WinMilestonePage() {
 						</div>
 					) : null}
 
-					<div className="mt-3 rounded-2xl border border-zinc-700/70 bg-zinc-950/60 p-2 sm:p-3">
+					<div className="mt-2.5 rounded-2xl border border-zinc-700/70 bg-zinc-950/60 p-1.5 sm:p-2">
 						{isLoading ? (
 							<div className="space-y-2">
 								{Array.from({ length: 6 }, (_, index) => (
@@ -453,16 +438,16 @@ export default function WinMilestonePage() {
 								))}
 							</div>
 						) : dateKeys.length === 0 || tags.length === 0 ? (
-							<div className="rounded-xl border border-zinc-700 bg-zinc-900/60 px-4 py-10 text-center text-sm text-zinc-400">
+							<div className="rounded-xl border border-zinc-700 bg-zinc-900/60 px-3 py-6 text-center text-sm text-zinc-400">
 								Belum ada data milestone untuk bulan ini.
 							</div>
 						) : (
-							<div className="max-h-[30rem] overflow-auto pb-2">
-								<table className="min-w-[44rem] border-separate border-spacing-x-2 border-spacing-y-2">
+							<div className="max-h-[68vh] overflow-auto pb-2">
+								<table className="min-w-max border-separate border-spacing-x-1 border-spacing-y-1">
 									<thead>
 										<tr>
-											<th className="sticky left-0 z-20 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-zinc-300">
-												Tag / Tanggal
+											<th className="sticky left-0 z-20 w-[4rem] min-w-[4rem] max-w-[4rem] rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-zinc-300">
+												Tags
 											</th>
 											{dateKeys.map((key) => {
 												const parsedDate = dateFromKey(key);
@@ -473,10 +458,10 @@ export default function WinMilestonePage() {
 												return (
 													<th
 														key={`head-${key}`}
-														className="h-16 min-w-14 align-bottom text-center"
+														className="h-14 min-w-12 align-bottom text-center"
 														title={parsedDate ? longDateFormatter.format(parsedDate) : key}
 													>
-														<span className="inline-block origin-bottom-left -rotate-45 whitespace-nowrap text-[10px] font-medium text-zinc-400">
+														<span className="inline-block origin-bottom-left -rotate-45 whitespace-nowrap text-[9px] font-medium text-zinc-400">
 															{dateLabel}
 														</span>
 													</th>
@@ -488,8 +473,10 @@ export default function WinMilestonePage() {
 									<tbody>
 										{tags.map((tag) => (
 											<tr key={`row-${tag.tag_id}`}>
-												<th className="sticky left-0 z-10 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-left text-sm font-medium text-zinc-200">
-													{tag.tag_name}
+												<th className="sticky left-0 z-10 w-[4rem] min-w-[4rem] max-w-[4rem] rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-left text-xs font-medium text-zinc-200 sm:text-sm">
+													<span className="block truncate" title={tag.tag_name}>
+														{tag.tag_name}
+													</span>
 												</th>
 
 												{dateKeys.map((key) => {
@@ -497,8 +484,8 @@ export default function WinMilestonePage() {
 													const cell = buildCellState(rows, activityPointById);
 
 													return (
-														<td key={`cell-${tag.tag_id}-${key}`} className="min-w-14">
-															<div className="flex h-9 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/60">
+														<td key={`cell-${tag.tag_id}-${key}`} className="min-w-12">
+															<div className="flex h-8 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900/60">
 																<MilestoneCellContent cell={cell} />
 															</div>
 														</td>

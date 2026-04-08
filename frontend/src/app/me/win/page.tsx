@@ -358,11 +358,6 @@ export default function WinProgressPage() {
 
 	const calendarCells = useMemo(() => buildCalendarCells(viewMonth), [viewMonth]);
 
-	const selectedPoint = useMemo(
-		() => monthPointMap[selectedDateKey] ?? 0,
-		[monthPointMap, selectedDateKey],
-	);
-
 	const monthPointTotal = useMemo(
 		() => Object.values(monthPointMap).reduce((total, point) => total + point, 0),
 		[monthPointMap],
@@ -439,22 +434,22 @@ export default function WinProgressPage() {
 	}
 
 	return (
-		<main className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937_0%,_#0a0a0a_40%,_#050505_100%)] px-3 py-4 text-zinc-100 sm:px-8 sm:py-10">
-			<section className="mx-auto flex w-full max-w-5xl flex-col gap-4 [font-family:var(--font-geist-sans)] sm:gap-5">
-				<header className="rounded-3xl border border-zinc-700/70 bg-zinc-900/80 p-4 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.85)] backdrop-blur sm:p-5">
-					<div className="flex flex-wrap items-start justify-between gap-4">
+		<main className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937_0%,_#0a0a0a_40%,_#050505_100%)] px-2.5 py-3 text-zinc-100 sm:px-5 sm:py-5">
+			<section className="mx-auto flex w-full max-w-5xl flex-col gap-3 [font-family:var(--font-geist-sans)] sm:gap-4">
+				<header className="rounded-3xl border border-zinc-700/70 bg-zinc-900/80 p-3 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.85)] backdrop-blur sm:p-4">
+					<div className="flex flex-wrap items-start justify-between gap-3">
 						<div className="space-y-2">
 							<h1 className="text-xl font-semibold tracking-tight text-zinc-50 sm:text-3xl">
 								Daily Progress Monitor
 							</h1>
-							<p className="max-w-xl text-xs text-zinc-300 sm:text-base">
+							<p className="max-w-xl text-xs text-zinc-300 sm:text-sm">
 								Fondasi dashboard untuk melihat perkembangan harian berdasarkan poin
 								per tanggal asli.
 							</p>
 						</div>
 					</div>
 
-					<div className="mt-4 hidden flex-wrap items-center gap-2 text-xs text-zinc-400 sm:flex sm:text-sm">
+					<div className="mt-3 hidden flex-wrap items-center gap-2 text-xs text-zinc-400 sm:flex sm:text-sm">
 						<span className="rounded-full border border-zinc-700 bg-zinc-800/70 px-3 py-1">
 							Dashboard
 						</span>
@@ -465,15 +460,12 @@ export default function WinProgressPage() {
 					</div>
 				</header>
 
-				<section className="rounded-3xl border border-zinc-700/70 bg-zinc-900/80 p-4 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.85)] backdrop-blur sm:p-5">
+				<section className="rounded-3xl border border-zinc-700/70 bg-zinc-900/80 p-3 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.85)] backdrop-blur sm:p-4">
 					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 						<div>
 							<h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-200 sm:text-base">
 								Trend Poin Harian
 							</h2>
-							<p className="mt-1 text-xs text-zinc-400 sm:text-sm">
-								Lihat perubahan poin berdasarkan rentang waktu yang dipilih.
-							</p>
 						</div>
 
 						<label className="flex w-full items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800/70 px-3 py-2 text-xs text-zinc-300 sm:w-auto sm:text-sm">
@@ -493,22 +485,22 @@ export default function WinProgressPage() {
 						</label>
 					</div>
 
-					<div className="mt-3 rounded-2xl border border-zinc-700/70 bg-zinc-950/60 p-2 sm:p-3">
+					<div className="mt-2.5 rounded-2xl border border-zinc-700/70 bg-zinc-950/60 p-2">
 						{trendError ? (
 							<p className="rounded-xl border border-amber-700/70 bg-amber-900/30 px-4 py-2 text-sm text-amber-200">
 								{trendError}
 							</p>
 						) : isTrendLoading ? (
-							<p className="px-2 py-12 text-center text-sm text-zinc-400">
+							<p className="px-2 py-8 text-center text-sm text-zinc-400">
 								Memuat data trend aktivitas...
 							</p>
 						) : trendSeries.length === 0 ? (
-							<p className="px-2 py-12 text-center text-sm text-zinc-400">
+							<p className="px-2 py-8 text-center text-sm text-zinc-400">
 								Belum ada data untuk ditampilkan.
 							</p>
 						) : (
 							<>
-								<div className="h-52 w-full sm:h-60">
+								<div className="h-44 w-full sm:h-52">
 									<svg
 										viewBox={`0 0 ${trendChartData.svgWidth} ${trendChartData.svgHeight}`}
 										className="h-full w-full"
@@ -565,16 +557,16 @@ export default function WinProgressPage() {
 					</div>
 
 					{monthError ? (
-						<p className="mt-3 rounded-xl border border-amber-700/70 bg-amber-900/30 px-4 py-2 text-sm text-amber-200">
+						<p className="mt-2.5 rounded-xl border border-amber-700/70 bg-amber-900/30 px-4 py-2 text-sm text-amber-200">
 							{monthError}
 						</p>
 					) : null}
 					{isMonthLoading ? (
-						<p className="mt-3 text-sm text-zinc-400">Memuat data aktivitas bulanan...</p>
+						<p className="mt-2.5 text-sm text-zinc-400">Memuat data aktivitas bulanan...</p>
 					) : null}
 				</section>
 
-				<section className="rounded-3xl border border-zinc-700/70 bg-zinc-900/80 p-4 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.85)] backdrop-blur sm:p-5">
+				<section className="rounded-3xl border border-zinc-700/70 bg-zinc-900/80 p-3 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.85)] backdrop-blur sm:p-4">
 					<div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
 						<div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-start">
 							<button
@@ -606,7 +598,14 @@ export default function WinProgressPage() {
 						</div>
 					</div>
 
-					<div className="mt-3 flex justify-end">
+					<div className="mt-3 flex justify-end gap-2">
+						<button
+							type="button"
+							onClick={() => router.push('/me/plan')}
+							className="rounded-xl border border-cyan-700/70 bg-cyan-900/35 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:bg-cyan-800/45 sm:text-sm"
+						>
+							Buka Plan
+						</button>
 						<button
 							type="button"
 							onClick={() => router.push('/me/win/milestone')}
@@ -616,13 +615,13 @@ export default function WinProgressPage() {
 						</button>
 					</div>
 
-					<div className="mt-4 grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase tracking-wide text-zinc-500 sm:gap-2 sm:text-sm">
+					<div className="mt-3 grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase tracking-wide text-zinc-500 sm:gap-2 sm:text-sm">
 						{WEEK_DAYS.map((day) => (
 							<p key={day}>{day}</p>
 						))}
 					</div>
 
-					<div className="mt-2 grid grid-cols-7 gap-1.5 sm:mt-3 sm:gap-2">
+					<div className="mt-2 grid grid-cols-7 gap-1.5 sm:gap-2">
 						{calendarCells.map((cell) => {
 							const point = monthPointMap[dateKey(cell.date)] ?? 0;
 							const key = dateKey(cell.date);
@@ -634,7 +633,7 @@ export default function WinProgressPage() {
 									key={key}
 									type="button"
 									onClick={() => openDayDetail(cell.date)}
-									className={`flex min-h-14 flex-col items-start rounded-xl border px-1.5 py-1.5 text-left text-[10px] transition sm:min-h-20 sm:px-3 sm:py-2 sm:text-sm ${
+									className={`flex min-h-12 flex-col items-start rounded-xl border px-1.5 py-1.5 text-left text-[10px] transition sm:min-h-[4.25rem] sm:px-2.5 sm:py-1.5 sm:text-sm ${
 										isSelected
 											? 'border-cyan-400 bg-cyan-500/15 text-cyan-100 shadow-[0_8px_20px_-12px_rgba(34,211,238,0.9)]'
 											: cell.inCurrentMonth

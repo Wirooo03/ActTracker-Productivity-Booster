@@ -221,8 +221,8 @@ function ModalFrame({
 	children,
 }: ModalFrameProps) {
 	return (
-		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-3 py-4 backdrop-blur-sm sm:px-4 sm:py-8">
-			<div className="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-zinc-700 bg-zinc-900 p-4 shadow-[0_20px_45px_-15px_rgba(0,0,0,0.85)] sm:p-5">
+		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-3 py-4 backdrop-blur-sm sm:px-4 sm:py-6">
+			<div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-zinc-700 bg-zinc-900 p-3.5 shadow-[0_20px_45px_-15px_rgba(0,0,0,0.85)] sm:p-4">
 				<div className="flex items-start justify-between gap-3">
 					<div>
 						<h3 className="text-xl font-semibold text-zinc-100">{title}</h3>
@@ -237,7 +237,7 @@ function ModalFrame({
 						Tutup
 					</button>
 				</div>
-				<div className="mt-5">{children}</div>
+				<div className="mt-4">{children}</div>
 			</div>
 		</div>
 	);
@@ -287,6 +287,9 @@ export default function WinDayDetailPage() {
 	const [initialTagRelationIds, setInitialTagRelationIds] = useState<number[]>([]);
 	const [isTagRelationsLoading, setIsTagRelationsLoading] = useState(false);
 	const [tagRelationError, setTagRelationError] = useState<string | null>(null);
+	const [activitySearchQuery, setActivitySearchQuery] = useState('');
+	const [tagCrudSearchQuery, setTagCrudSearchQuery] = useState('');
+	const [tagPickerSearchQuery, setTagPickerSearchQuery] = useState('');
 
 	async function refreshTags(): Promise<void> {
 		setIsTagsLoading(true);
@@ -408,6 +411,9 @@ export default function WinDayDetailPage() {
 		setTagRelationError(null);
 		setInitialTagRelationIds([]);
 		setTagRelations([createEmptyTagRelation()]);
+		setActivitySearchQuery('');
+		setTagCrudSearchQuery('');
+		setTagPickerSearchQuery('');
 		void loadActivitiesForDate();
 
 		return () => {
@@ -440,6 +446,42 @@ export default function WinDayDetailPage() {
 		[activities],
 	);
 
+	const normalizedActivitySearchQuery = activitySearchQuery.trim().toLowerCase();
+
+	const filteredActivities = useMemo(() => {
+		if (!normalizedActivitySearchQuery) {
+			return activities;
+		}
+
+		return activities.filter((activity) =>
+			activity.activity_description.toLowerCase().includes(normalizedActivitySearchQuery),
+		);
+	}, [activities, normalizedActivitySearchQuery]);
+
+	const normalizedTagCrudSearchQuery = tagCrudSearchQuery.trim().toLowerCase();
+
+	const filteredTagsForCrud = useMemo(() => {
+		if (!normalizedTagCrudSearchQuery) {
+			return tags;
+		}
+
+		return tags.filter((tag) =>
+			tag.tag_name.toLowerCase().includes(normalizedTagCrudSearchQuery),
+		);
+	}, [normalizedTagCrudSearchQuery, tags]);
+
+	const normalizedTagPickerSearchQuery = tagPickerSearchQuery.trim().toLowerCase();
+
+	const filteredTagsForPicker = useMemo(() => {
+		if (!normalizedTagPickerSearchQuery) {
+			return tags;
+		}
+
+		return tags.filter((tag) =>
+			tag.tag_name.toLowerCase().includes(normalizedTagPickerSearchQuery),
+		);
+	}, [normalizedTagPickerSearchQuery, tags]);
+
 	const pointDiff = totalPoint - TARGET_POINT;
 	const pointDiffTextClass = pointDiff < 0 ? 'text-rose-300' : 'text-emerald-300';
 
@@ -469,6 +511,7 @@ export default function WinDayDetailPage() {
 		setStatusMessage(null);
 		setFormError(null);
 		setTagRelationError(null);
+		setTagPickerSearchQuery('');
 		setActiveActivity(null);
 		setFormState({ point: '1', description: '' });
 		setInitialTagRelationIds([]);
@@ -484,6 +527,7 @@ export default function WinDayDetailPage() {
 		setStatusMessage(null);
 		setTagFormError(null);
 		setTagRelationError(null);
+		setTagCrudSearchQuery('');
 		setFormError(null);
 		setEditingTagId(null);
 		setEditingTagName('');
@@ -499,6 +543,7 @@ export default function WinDayDetailPage() {
 		setStatusMessage(null);
 		setFormError(null);
 		setTagRelationError(null);
+		setTagPickerSearchQuery('');
 		setActiveActivity(activity);
 		setFormState({
 			point: String(activity.activity_point),
@@ -807,9 +852,9 @@ export default function WinDayDetailPage() {
 	}
 
 	return (
-		<main className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937_0%,_#0b0b0b_42%,_#040404_100%)] px-3 py-4 text-zinc-100 sm:px-8 sm:py-10">
-			<section className="mx-auto flex w-full max-w-5xl flex-col gap-4 [font-family:var(--font-geist-sans)] sm:gap-5">
-				<header className="rounded-3xl border border-zinc-700/70 bg-zinc-900/80 p-4 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.85)] backdrop-blur sm:p-5">
+		<main className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937_0%,_#0b0b0b_42%,_#040404_100%)] px-2.5 py-3 text-zinc-100 sm:px-5 sm:py-5">
+			<section className="mx-auto flex w-full max-w-5xl flex-col gap-3 [font-family:var(--font-geist-sans)] sm:gap-4">
+				<header className="rounded-3xl border border-zinc-700/70 bg-zinc-900/80 p-3 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.85)] backdrop-blur sm:p-4">
 					<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
 						<div className="flex min-w-0 items-start gap-3">
 							<Link
@@ -831,7 +876,7 @@ export default function WinDayDetailPage() {
 							</div>
 						</div>
 
-						<div className="w-full rounded-2xl border border-cyan-700/60 bg-cyan-950/50 px-4 py-3 text-left sm:w-auto sm:text-right">
+						<div className="w-full rounded-2xl border border-cyan-700/60 bg-cyan-950/50 px-3 py-2.5 text-left sm:w-auto sm:text-right">
 							<p className="text-xs uppercase tracking-wide text-cyan-200/75">
 								Tanggal aktif
 							</p>
@@ -841,7 +886,7 @@ export default function WinDayDetailPage() {
 						</div>
 					</div>
 
-					<div className="mt-4 hidden flex-wrap items-center gap-2 text-xs text-zinc-400 sm:flex sm:text-sm">
+					<div className="mt-3 hidden flex-wrap items-center gap-2 text-xs text-zinc-400 sm:flex sm:text-sm">
 						<span className="rounded-full border border-zinc-700 bg-zinc-800/70 px-3 py-1">
 							Dashboard
 						</span>
@@ -856,7 +901,7 @@ export default function WinDayDetailPage() {
 					</div>
 				</header>
 
-				<section className="rounded-3xl border border-zinc-700/70 bg-zinc-900/80 p-4 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.85)] backdrop-blur sm:p-5">
+				<section className="rounded-3xl border border-zinc-700/70 bg-zinc-900/80 p-3 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.85)] backdrop-blur sm:p-4">
 					<div className="flex items-center gap-3">
 						<div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-start">
 							<button
@@ -881,7 +926,7 @@ export default function WinDayDetailPage() {
 						</div>
 					</div>
 
-					<div className="mt-4">
+					<div className="mt-3">
 						<div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
 							<div className="rounded-xl border border-zinc-700 bg-zinc-950/60 px-3 py-2">
 								<p className="text-[11px] font-semibold tracking-wide text-zinc-500">Positive</p>
@@ -907,13 +952,13 @@ export default function WinDayDetailPage() {
 					</div>
 
 					{statusMessage ? (
-						<p className="mt-3 rounded-xl border border-emerald-700/60 bg-emerald-900/35 px-4 py-2 text-sm text-emerald-200">
+						<p className="mt-2.5 rounded-xl border border-emerald-700/60 bg-emerald-900/35 px-4 py-2 text-sm text-emerald-200">
 							{statusMessage}
 						</p>
 					) : null}
 
 					{loadError ? (
-						<div className="mt-3 rounded-xl border border-amber-700/70 bg-amber-900/30 p-4 text-sm text-amber-200">
+						<div className="mt-2.5 rounded-xl border border-amber-700/70 bg-amber-900/30 p-3 text-sm text-amber-200">
 							<p>{loadError}</p>
 							<button
 								type="button"
@@ -928,8 +973,27 @@ export default function WinDayDetailPage() {
 					) : null}
 				</section>
 
-				<section className="rounded-3xl border border-zinc-700/70 bg-zinc-900/80 p-4 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.85)] backdrop-blur sm:p-5">
-					<div className="max-h-[24rem] overflow-y-auto pr-1 [scrollbar-color:#52525b_transparent] sm:max-h-[30rem]">
+				<section className="rounded-3xl border border-zinc-700/70 bg-zinc-900/80 p-3 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.85)] backdrop-blur sm:p-4">
+					<div className="mb-2.5 rounded-2xl border border-zinc-700 bg-zinc-950/60 p-2.5">
+						<label className="block text-xs font-semibold uppercase tracking-wide text-zinc-400">
+							Cari aktivitas
+							<input
+								type="text"
+								value={activitySearchQuery}
+								onChange={(event) => setActivitySearchQuery(event.target.value)}
+								placeholder="Ketik nama aktivitas..."
+								className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-normal text-zinc-100 outline-none transition focus:border-cyan-500"
+							/>
+						</label>
+
+						{activitySearchQuery.trim() ? (
+							<p className="mt-2 text-xs text-zinc-400">
+								Menampilkan {filteredActivities.length} dari {activities.length} aktivitas.
+							</p>
+						) : null}
+					</div>
+
+					<div className="max-h-[56vh] overflow-y-auto pr-1 [scrollbar-color:#52525b_transparent] sm:max-h-[62vh]">
 						{isLoading ? (
 							<div className="space-y-3">
 								{Array.from({ length: 6 }, (_, index) => (
@@ -940,11 +1004,15 @@ export default function WinDayDetailPage() {
 								))}
 							</div>
 						) : activities.length === 0 ? (
-							<div className="rounded-2xl border border-zinc-700 bg-zinc-950/60 p-6 text-center text-sm text-zinc-400">
+							<div className="rounded-2xl border border-zinc-700 bg-zinc-950/60 p-4 text-center text-sm text-zinc-400">
 								Belum ada aktivitas untuk tanggal ini.
 							</div>
+						) : filteredActivities.length === 0 ? (
+							<div className="rounded-2xl border border-zinc-700 bg-zinc-950/60 p-4 text-center text-sm text-zinc-400">
+								Aktivitas dengan kata kunci tersebut tidak ditemukan.
+							</div>
 						) : (
-							activities.map((activity, index) => {
+							filteredActivities.map((activity, index) => {
 								const activityToneClass =
 									activity.activity_point > 0
 										? 'border-emerald-900/40 bg-emerald-950/20 hover:border-emerald-600/40'
@@ -962,15 +1030,15 @@ export default function WinDayDetailPage() {
 								return (
 									<article
 										key={activity.activity_id}
-										className={`mb-3 rounded-2xl border p-3 transition hover:-translate-y-0.5 ${activityToneClass}`}
+										className={`mb-2 rounded-2xl border p-2.5 transition hover:-translate-y-0.5 ${activityToneClass}`}
 										style={{
 											animation: 'fadeSlideIn 360ms ease-out both',
 											animationDelay: `${index * 30}ms`,
 										}}
 									>
-										<div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:gap-3">
+										<div className="grid grid-cols-[auto_1fr_auto] items-center gap-1.5 sm:gap-2.5">
 											<span
-												className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold sm:px-3 sm:py-2 sm:text-sm ${pointToneClass}`}
+												className={`rounded-xl border px-2 py-1.5 text-xs font-semibold sm:px-2.5 sm:py-1.5 sm:text-sm ${pointToneClass}`}
 											>
 												{formatSigned(activity.activity_point)}
 											</span>
@@ -1022,11 +1090,11 @@ export default function WinDayDetailPage() {
 						)}
 					</div>
 
-					<div className="mt-4 flex items-center justify-end gap-2">
+					<div className="mt-3 flex items-center justify-end gap-2">
 						<button
 							type="button"
 							onClick={openTagModal}
-							className="grid h-11 w-11 place-items-center rounded-xl border border-zinc-700 bg-zinc-800 text-zinc-100 transition hover:border-cyan-500 hover:bg-cyan-900/40"
+							className="grid h-10 w-10 place-items-center rounded-xl border border-zinc-700 bg-zinc-800 text-zinc-100 transition hover:border-cyan-500 hover:bg-cyan-900/40"
 							aria-label="Kelola tag"
 							title="Kelola tag"
 						>
@@ -1045,7 +1113,7 @@ export default function WinDayDetailPage() {
 						<button
 							type="button"
 							onClick={openAddModal}
-							className="grid h-11 w-11 place-items-center rounded-xl border border-zinc-700 bg-zinc-800 text-zinc-100 transition hover:border-emerald-500 hover:bg-emerald-900/45"
+							className="grid h-10 w-10 place-items-center rounded-xl border border-zinc-700 bg-zinc-800 text-zinc-100 transition hover:border-emerald-500 hover:bg-emerald-900/45"
 							aria-label="Tambah aktivitas"
 							title="Tambah aktivitas baru"
 						>
@@ -1134,6 +1202,24 @@ export default function WinDayDetailPage() {
 								<p className="mt-2 text-xs text-zinc-400">Memuat relasi tag...</p>
 							) : null}
 
+							<label className="mt-2 block text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+								Cari tag untuk dropdown
+								<input
+									type="text"
+									value={tagPickerSearchQuery}
+									onChange={(event) => setTagPickerSearchQuery(event.target.value)}
+									placeholder="Cari nama tag..."
+									disabled={isSubmitting || isTagsLoading}
+									className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-2 py-2 text-xs font-normal text-zinc-100 outline-none transition focus:border-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
+								/>
+							</label>
+
+							{tagPickerSearchQuery.trim() ? (
+								<p className="mt-2 text-xs text-zinc-400">
+									Tag cocok: {filteredTagsForPicker.length} dari {tags.length}
+								</p>
+							) : null}
+
 							{!isTagsLoading && tags.length === 0 ? (
 								<p className="mt-2 text-xs text-zinc-400">
 									Belum ada tag. Tambahkan dulu lewat tombol kelola tag.
@@ -1157,7 +1243,7 @@ export default function WinDayDetailPage() {
 												className="rounded-xl border border-zinc-700 bg-zinc-950 px-2 py-2 text-xs text-zinc-100 outline-none transition focus:border-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
 											>
 												<option value="">Pilih tag</option>
-												{tags.map((tag) => (
+														{filteredTagsForPicker.map((tag) => (
 													<option key={tag.tag_id} value={tag.tag_id}>
 														{tag.tag_name}
 													</option>
@@ -1300,6 +1386,24 @@ export default function WinDayDetailPage() {
 								<p className="mt-2 text-xs text-zinc-400">Memuat relasi tag...</p>
 							) : null}
 
+							<label className="mt-2 block text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+								Cari tag untuk dropdown
+								<input
+									type="text"
+									value={tagPickerSearchQuery}
+									onChange={(event) => setTagPickerSearchQuery(event.target.value)}
+									placeholder="Cari nama tag..."
+									disabled={isSubmitting || isTagsLoading}
+									className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-2 py-2 text-xs font-normal text-zinc-100 outline-none transition focus:border-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
+								/>
+							</label>
+
+							{tagPickerSearchQuery.trim() ? (
+								<p className="mt-2 text-xs text-zinc-400">
+									Tag cocok: {filteredTagsForPicker.length} dari {tags.length}
+								</p>
+							) : null}
+
 							{!isTagsLoading && tags.length === 0 ? (
 								<p className="mt-2 text-xs text-zinc-400">
 									Belum ada tag. Tambahkan dulu lewat tombol kelola tag.
@@ -1323,7 +1427,7 @@ export default function WinDayDetailPage() {
 												className="rounded-xl border border-zinc-700 bg-zinc-950 px-2 py-2 text-xs text-zinc-100 outline-none transition focus:border-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
 											>
 												<option value="">Pilih tag</option>
-												{tags.map((tag) => (
+														{filteredTagsForPicker.map((tag) => (
 													<option key={tag.tag_id} value={tag.tag_id}>
 														{tag.tag_name}
 													</option>
@@ -1421,6 +1525,24 @@ export default function WinDayDetailPage() {
 							</button>
 						</form>
 
+						<label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500">
+							Cari tag
+							<input
+								type="text"
+								value={tagCrudSearchQuery}
+								onChange={(event) => setTagCrudSearchQuery(event.target.value)}
+								placeholder="Cari nama tag..."
+								disabled={isTagSubmitting || isTagsLoading}
+								className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm font-normal text-zinc-100 outline-none transition focus:border-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
+							/>
+						</label>
+
+						{tagCrudSearchQuery.trim() ? (
+							<p className="text-xs text-zinc-400">
+								Menampilkan {filteredTagsForCrud.length} dari {tags.length} tag.
+							</p>
+						) : null}
+
 						{tagFormError ? (
 							<p className="rounded-xl border border-rose-700/60 bg-rose-900/35 px-3 py-2 text-sm text-rose-200">
 								{tagFormError}
@@ -1439,9 +1561,13 @@ export default function WinDayDetailPage() {
 							<div className="rounded-xl border border-zinc-700 bg-zinc-950/70 px-3 py-4 text-center text-sm text-zinc-400">
 								Belum ada tag.
 							</div>
+						) : filteredTagsForCrud.length === 0 ? (
+							<div className="rounded-xl border border-zinc-700 bg-zinc-950/70 px-3 py-4 text-center text-sm text-zinc-400">
+								Tag tidak ditemukan dengan kata kunci tersebut.
+							</div>
 						) : (
 							<div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-								{tags.map((tag) => (
+								{filteredTagsForCrud.map((tag) => (
 									<div
 										key={tag.tag_id}
 										className="rounded-xl border border-zinc-700 bg-zinc-950/70 p-3"
