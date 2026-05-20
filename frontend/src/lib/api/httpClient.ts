@@ -97,15 +97,18 @@ export async function request<TResponse, TBody = unknown>(
 	const url = withQueryString(`${baseUrl}${normalizePath(path)}`, query);
 	const headers = new Headers(rawHeaders);
 	headers.set('Accept', 'application/json');
+	if (!headers.has('Content-Type') && (body === undefined || isJsonBody(body))) {
+		headers.set('Content-Type', 'application/json');
+	}
 
 	let serializedBody: BodyInit | undefined;
 	if (body !== undefined) {
 		if (isJsonBody(body)) {
-			if (!headers.has('Content-Type')) {
-				headers.set('Content-Type', 'application/json');
-			}
 			serializedBody = JSON.stringify(body);
 		} else {
+			if (!rawHeaders || !new Headers(rawHeaders).has('Content-Type')) {
+				headers.delete('Content-Type');
+			}
 			serializedBody = body as BodyInit;
 		}
 	}

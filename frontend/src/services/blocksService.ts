@@ -8,6 +8,8 @@ import type {
 	Block,
 	BlockCreatePayload,
 	BlockListQuery,
+	BlockMutationMeta,
+	MutationRequestOptions,
 	BlockPatchPayload,
 	BlockPutPayload,
 } from '@/lib/api/types';
@@ -37,11 +39,24 @@ function normalizeItemResponse(response: ApiItemResponse<Block>): ApiItemRespons
 }
 
 function normalizeMutationResponse(
-	response: ApiMutationResponse<Block>,
-): ApiMutationResponse<Block> {
+	response: ApiMutationResponse<Block, BlockMutationMeta>,
+): ApiMutationResponse<Block, BlockMutationMeta> {
+	const snapshotBlocks = response.meta?.snapshot?.blocks;
+	const normalizedMeta =
+		Array.isArray(snapshotBlocks)
+			? {
+				...response.meta,
+				snapshot: {
+					...response.meta?.snapshot,
+					blocks: snapshotBlocks.map(normalizeBlock),
+				},
+			}
+			: response.meta;
+
 	return {
 		...response,
 		data: normalizeBlock(response.data),
+		meta: normalizedMeta,
 	};
 }
 
@@ -113,6 +128,14 @@ function assertPositiveInteger(name: string, value: number): void {
 	}
 }
 
+function resolveMutationQuery(options?: MutationRequestOptions): { include_snapshot?: boolean } | undefined {
+	if (!options) {
+		return undefined;
+	}
+
+	return options.includeSnapshot ? { include_snapshot: true } : undefined;
+}
+
 async function list(query?: BlockListQuery): Promise<ApiListResponse<Block>> {
 	const response = await httpClient.get<ApiListResponse<Block>>(BLOCKS_ENDPOINT, { query });
 	return normalizeListResponse(response);
@@ -128,41 +151,66 @@ async function getById(blockId: number): Promise<ApiItemResponse<Block>> {
 	return normalizeItemResponse(response);
 }
 
-async function create(payload: BlockCreatePayload): Promise<ApiMutationResponse<Block>> {
+async function create(
+	payload: BlockCreatePayload,
+	options?: MutationRequestOptions,
+): Promise<ApiMutationResponse<Block, BlockMutationMeta>> {
 	const normalizedPayload = normalizeCreatePayload(payload);
-	const response = await httpClient.post<ApiMutationResponse<Block>, BlockCreatePayload>(
+	const response = await httpClient.post<ApiMutationResponse<Block, BlockMutationMeta>, BlockCreatePayload>(
 		BLOCKS_ENDPOINT,
 		normalizedPayload,
+		{
+			query: resolveMutationQuery(options),
+		},
 	);
 
 	return normalizeMutationResponse(response);
 }
 
-async function replace(blockId: number, payload: BlockPutPayload): Promise<ApiMutationResponse<Block>> {
+async function replace(
+	blockId: number,
+	payload: BlockPutPayload,
+	options?: MutationRequestOptions,
+): Promise<ApiMutationResponse<Block, BlockMutationMeta>> {
 	assertPositiveInteger('blockId', blockId);
 	const normalizedPayload = normalizePutPayload(payload);
-	const response = await httpClient.put<ApiMutationResponse<Block>, BlockPutPayload>(
+	const response = await httpClient.put<ApiMutationResponse<Block, BlockMutationMeta>, BlockPutPayload>(
 		`${BLOCKS_ENDPOINT}/${blockId}`,
 		normalizedPayload,
+		{
+			query: resolveMutationQuery(options),
+		},
 	);
 
 	return normalizeMutationResponse(response);
 }
 
-async function update(blockId: number, payload: BlockPatchPayload): Promise<ApiMutationResponse<Block>> {
+async function update(
+	blockId: number,
+	payload: BlockPatchPayload,
+	options?: MutationRequestOptions,
+): Promise<ApiMutationResponse<Block, BlockMutationMeta>> {
 	assertPositiveInteger('blockId', blockId);
 	const normalizedPayload = normalizePatchPayload(payload);
-	const response = await httpClient.patch<ApiMutationResponse<Block>, BlockPatchPayload>(
+	const response = await httpClient.patch<ApiMutationResponse<Block, BlockMutationMeta>, BlockPatchPayload>(
 		`${BLOCKS_ENDPOINT}/${blockId}`,
 		normalizedPayload,
+		{
+			query: resolveMutationQuery(options),
+		},
 	);
 
 	return normalizeMutationResponse(response);
 }
 
-async function remove(blockId: number): Promise<ApiDeleteResponse> {
+async function remove(
+	blockId: number,
+	options?: MutationRequestOptions,
+): Promise<ApiDeleteResponse<BlockMutationMeta>> {
 	assertPositiveInteger('blockId', blockId);
-	return httpClient.delete<ApiDeleteResponse>(`${BLOCKS_ENDPOINT}/${blockId}`);
+	return httpClient.delete<ApiDeleteResponse<BlockMutationMeta>>(`${BLOCKS_ENDPOINT}/${blockId}`, {
+		query: resolveMutationQuery(options),
+	});
 }
 
 export const blocksService = {

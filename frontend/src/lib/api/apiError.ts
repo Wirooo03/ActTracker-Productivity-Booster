@@ -93,3 +93,68 @@ export function getFieldErrors(error: unknown, fieldName: string): string[] {
 
 	return errors[fieldName] ?? [];
 }
+
+export function getValidationErrorMap(error: unknown): ValidationErrors {
+	const errors = getValidationErrors(error);
+	return errors ?? {};
+}
+
+export function getNotFoundMessage(error: unknown): string | null {
+	if (!(error instanceof ApiError)) {
+		return null;
+	}
+
+	if (error.status !== 404) {
+		return null;
+	}
+
+	return error.message;
+}
+
+export type ParsedFormApiError = {
+	status: number | null;
+	message: string;
+	fieldErrors: ValidationErrors;
+	notFoundMessage: string | null;
+	isValidationError: boolean;
+	isNotFound: boolean;
+};
+
+export function parseFormApiError(
+	error: unknown,
+	fallbackMessage = 'Terjadi kesalahan yang tidak terduga.',
+): ParsedFormApiError {
+	if (error instanceof ApiError) {
+		const fieldErrors = getValidationErrorMap(error);
+		const notFoundMessage = getNotFoundMessage(error);
+
+		return {
+			status: error.status,
+			message: error.message,
+			fieldErrors,
+			notFoundMessage,
+			isValidationError: error.status === 422,
+			isNotFound: error.status === 404,
+		};
+	}
+
+	if (error instanceof Error && error.message) {
+		return {
+			status: null,
+			message: error.message,
+			fieldErrors: {},
+			notFoundMessage: null,
+			isValidationError: false,
+			isNotFound: false,
+		};
+	}
+
+	return {
+		status: null,
+		message: fallbackMessage,
+		fieldErrors: {},
+		notFoundMessage: null,
+		isValidationError: false,
+		isNotFound: false,
+	};
+}

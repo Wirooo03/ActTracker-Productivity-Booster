@@ -3,6 +3,7 @@ import { normalizeDurationHHMMSS } from '@/lib/api/duration';
 import type {
 	Action,
 	ActionCreatePayload,
+	ActionListQuery,
 	ActionPatchPayload,
 	ActionPutPayload,
 	ApiDeleteResponse,
@@ -12,16 +13,19 @@ import type {
 } from '@/lib/api/types';
 
 const ACTIONS_ENDPOINT = '/api/actions';
+const MAX_LIST_PER_PAGE = 200;
 
 function normalizeAction(item: Action): Action {
-	const averageDuration = item['durasi rata-rata'];
+	const averageDuration = item['durasi rata-rata'] ?? item.average_duration;
+	const normalizedAverageDuration =
+		typeof averageDuration === 'string'
+			? normalizeDurationHHMMSS(averageDuration)
+			: null;
 
 	return {
 		...item,
-		'durasi rata-rata':
-			typeof averageDuration === 'string'
-				? normalizeDurationHHMMSS(averageDuration)
-				: null,
+		'durasi rata-rata': normalizedAverageDuration,
+		average_duration: normalizedAverageDuration,
 	};
 }
 
@@ -54,8 +58,36 @@ function assertPositiveInteger(name: string, value: number): void {
 	}
 }
 
-async function list(): Promise<ApiListResponse<Action>> {
-	const response = await httpClient.get<ApiListResponse<Action>>(ACTIONS_ENDPOINT);
+function normalizeListQuery(query?: ActionListQuery): ActionListQuery | undefined {
+	if (!query) {
+		return query;
+	}
+
+	const normalizedQuery: ActionListQuery = { ...query };
+
+	if (
+		typeof normalizedQuery.per_page === 'number' &&
+		normalizedQuery.per_page > MAX_LIST_PER_PAGE
+	) {
+		normalizedQuery.per_page = MAX_LIST_PER_PAGE;
+	}
+
+	if (Array.isArray(normalizedQuery.fields)) {
+		const fields = normalizedQuery.fields
+			.map((field) => field.trim())
+			.filter((field) => field.length > 0)
+			.join(',');
+
+		normalizedQuery.fields = fields || undefined;
+	}
+
+	return normalizedQuery;
+}
+
+async function list(query?: ActionListQuery): Promise<ApiListResponse<Action>> {
+	const response = await httpClient.get<ApiListResponse<Action>>(ACTIONS_ENDPOINT, {
+		query: normalizeListQuery(query),
+	});
 	return normalizeListResponse(response);
 }
 

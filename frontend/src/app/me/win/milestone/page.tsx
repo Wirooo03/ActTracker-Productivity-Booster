@@ -1,15 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-	getActivitiesByMonth,
-	getActivityTags,
-	getTags,
-	type Activity,
-	type ActivityTag,
-	type Tag,
-} from '@/lib/activities-api';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { isApiError } from '@/lib/api/apiError';
+import type { Activity, ActivityTag, Tag } from '@/lib/api/types';
+import { activitiesService } from '@/services/activitiesService';
+import { activityTagsService } from '@/services/activityTagsService';
+import { tagsService } from '@/services/tagsService';
+import { winService } from '@/services/winService';
 
 type MilestoneCell =
 	| { kind: 'missing' }
@@ -35,6 +33,8 @@ const monthTitleFormatter = new Intl.DateTimeFormat('id-ID', {
 	month: 'long',
 	year: 'numeric',
 });
+
+const USE_MILESTONE_MATRIX_ENDPOINT = false;
 
 function getErrorMessage(error: unknown): string {
 	if (error instanceof Error && error.message) {
@@ -95,8 +95,25 @@ function addMonths(date: Date, amount: number): Date {
 	return new Date(date.getFullYear(), date.getMonth() + amount, 1);
 }
 
+function toDateKey(date: Date): string {
+	const year = date.getFullYear();
+	const month = String(date.getMonth() + 1).padStart(2, '0');
+	const day = String(date.getDate()).padStart(2, '0');
+	return `${year}-${month}-${day}`;
+}
+
 function normalizeTags(data: Tag[]): Tag[] {
-	return [...data].sort((left, right) => left.tag_id - right.tag_id);
+	return [...data].sort((left, right) => {
+		const nameCompare = left.tag_name.localeCompare(right.tag_name, 'id-ID', {
+			sensitivity: 'base',
+		});
+
+		if (nameCompare !== 0) {
+			return nameCompare;
+		}
+
+		return left.tag_id - right.tag_id;
+	});
 }
 
 function normalizeActivities(data: Activity[]): Activity[] {
@@ -147,7 +164,7 @@ function buildCellState(
 			continue;
 		}
 
-		if (point > 0) {
+		if (point >= 0) {
 			hasPositive = true;
 		}
 
@@ -166,6 +183,26 @@ function buildCellState(
 
 	if (hasPositive && hasNegative) {
 		return { kind: 'mixed' };
+	}
+
+	return { kind: 'missing' };
+}
+
+function milestoneCellFromPayload(state: string, value: number | null): MilestoneCell {
+	if (state === 'check') {
+		return { kind: 'check' };
+	}
+
+	if (state === 'cross') {
+		return { kind: 'cross' };
+	}
+
+	if (state === 'mixed') {
+		return { kind: 'mixed' };
+	}
+
+	if (state === 'value' && typeof value === 'number' && Number.isFinite(value)) {
+		return { kind: 'value', value };
 	}
 
 	return { kind: 'missing' };
@@ -215,35 +252,31 @@ export default function WinMilestonePage() {
 	const initialMonth = useMemo(() => startOfMonth(new Date()), []);
 	const [viewMonth, setViewMonth] = useState(initialMonth);
 	const [tags, setTags] = useState<Tag[]>([]);
+	const [matrixDateKeys, setMatrixDateKeys] = useState<string[] | null>(null);
+	const [matrixCellMap, setMatrixCellMap] = useState<Map<string, MilestoneCell> | null>(null);
+	const [supportsMatrixEndpoint, setSupportsMatrixEndpoint] = useState(
+		USE_MILESTONE_MATRIX_ENDPOINT,
+	);
 	const [activities, setActivities] = useState<Activity[]>([]);
 	const [activityTags, setActivityTags] = useState<ActivityTag[]>([]);
 	const [isMetadataLoading, setIsMetadataLoading] = useState(true);
 	const [isMonthLoading, setIsMonthLoading] = useState(true);
 	const [metadataError, setMetadataError] = useState<string | null>(null);
 	const [monthError, setMonthError] = useState<string | null>(null);
-	const hasLoadedMetadataRef = useRef(false);
 
-	const loadMetadata = useCallback(async (force = false): Promise<void> => {
-		if (hasLoadedMetadataRef.current && !force) {
-			return;
-		}
-
+	const loadMetadata = useCallback(async (): Promise<void> => {
 		setIsMetadataLoading(true);
 		setMetadataError(null);
 
 		try {
-			const [tagsResponse, activityTagsResponse] = await Promise.all([
-				getTags(),
-				getActivityTags(),
-			]);
+			const tagsResponse = await tagsService.list({
+				fields: ['tag_id', 'tag_name'],
+			});
 
 			setTags(normalizeTags(tagsResponse.data));
-			setActivityTags(activityTagsResponse.data);
-			hasLoadedMetadataRef.current = true;
 		} catch (error) {
 			setMetadataError(getErrorMessage(error));
 			setTags([]);
-			setActivityTags([]);
 		} finally {
 			setIsMetadataLoading(false);
 		}
@@ -254,28 +287,160 @@ export default function WinMilestonePage() {
 		setMonthError(null);
 
 		try {
-			const response = await getActivitiesByMonth(
+			const response = await activitiesService.listByMonth(
 				monthDate.getFullYear(),
 				monthDate.getMonth() + 1,
 			);
+
+			const startDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+			const endDate = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
+			const activityTagsByMonth: ActivityTag[] = [];
+			const perPage = 200;
+			let page = 1;
+
+			while (true) {
+				const activityTagsResponse = await activityTagsService.list({
+					date_from: toDateKey(startDate),
+					date_to: toDateKey(endDate),
+					include: ['activity'],
+					per_page: perPage,
+					page,
+				});
+
+				activityTagsByMonth.push(...activityTagsResponse.data);
+
+				const hasMoreRaw = activityTagsResponse.meta?.has_more;
+				const hasMore = typeof hasMoreRaw === 'boolean' ? hasMoreRaw : null;
+				const lastPageRaw = activityTagsResponse.meta?.last_page;
+				const lastPage =
+					typeof lastPageRaw === 'number' && Number.isInteger(lastPageRaw) && lastPageRaw > 0
+						? lastPageRaw
+						: null;
+
+				if (hasMore === true) {
+					page += 1;
+					continue;
+				}
+
+				if (hasMore === false) {
+					break;
+				}
+
+				if (lastPage !== null) {
+					if (page >= lastPage) {
+						break;
+					}
+
+					page += 1;
+					continue;
+				}
+
+				if (activityTagsResponse.data.length < perPage) {
+					break;
+				}
+
+				page += 1;
+
+				if (page > 1000) {
+					throw new Error('Pagination relasi tag melebihi batas wajar.');
+				}
+			}
+
 			setActivities(normalizeActivities(response.data));
+			setActivityTags(activityTagsByMonth);
 		} catch (error) {
 			setMonthError(getErrorMessage(error));
 			setActivities([]);
+			setActivityTags([]);
 		} finally {
 			setIsMonthLoading(false);
 		}
 	}, []);
 
 	useEffect(() => {
+		if (supportsMatrixEndpoint !== false) {
+			return;
+		}
+
 		void loadMetadata();
-	}, [loadMetadata]);
+	}, [loadMetadata, supportsMatrixEndpoint]);
 
 	useEffect(() => {
-		void loadMonthActivities(viewMonth);
-	}, [loadMonthActivities, viewMonth]);
+		if (supportsMatrixEndpoint !== false) {
+			return;
+		}
 
-	const dateKeys = useMemo(() => {
+		void loadMonthActivities(viewMonth);
+	}, [loadMonthActivities, supportsMatrixEndpoint, viewMonth]);
+
+	useEffect(() => {
+		if (supportsMatrixEndpoint === false) {
+			return;
+		}
+
+		let isCurrent = true;
+
+		async function loadMatrix(): Promise<void> {
+			setIsMetadataLoading(true);
+			setIsMonthLoading(true);
+			setMetadataError(null);
+			setMonthError(null);
+
+			try {
+				const response = await winService.getMilestoneMatrix(
+					viewMonth.getFullYear(),
+					viewMonth.getMonth() + 1,
+				);
+
+				if (!isCurrent) {
+					return;
+				}
+
+				setTags(normalizeTags(response.data.tags));
+				setMatrixDateKeys([...response.data.dates].sort((left, right) => right.localeCompare(left)));
+
+				const cellsMap = new Map<string, MilestoneCell>();
+				for (const cell of response.data.cells) {
+					cellsMap.set(
+						`${cell.tag_id}|${cell.date}`,
+						milestoneCellFromPayload(cell.state, cell.value),
+					);
+				}
+
+				setMatrixCellMap(cellsMap);
+				setActivities([]);
+				setActivityTags([]);
+				setSupportsMatrixEndpoint(true);
+			} catch (error) {
+				if (!isCurrent) {
+					return;
+				}
+
+				if (isApiError(error) && (error.status === 404 || error.status === 405)) {
+					setSupportsMatrixEndpoint(false);
+					setMatrixDateKeys(null);
+					setMatrixCellMap(null);
+					return;
+				}
+
+				setMetadataError(getErrorMessage(error));
+				setMonthError(null);
+			} finally {
+				if (isCurrent) {
+					setIsMetadataLoading(false);
+					setIsMonthLoading(false);
+				}
+			}
+		}
+
+		void loadMatrix();
+
+		return () => {
+			isCurrent = false;
+		};
+	}, [supportsMatrixEndpoint, viewMonth]);
+
+	const legacyDateKeys = useMemo(() => {
 		const keys = new Set<string>();
 
 		for (const activity of activities) {
@@ -288,6 +453,8 @@ export default function WinMilestonePage() {
 		// Latest date appears on the left.
 		return [...keys].sort((left, right) => right.localeCompare(left));
 	}, [activities]);
+
+	const dateKeys = matrixDateKeys ?? legacyDateKeys;
 
 	const activityDateById = useMemo(() => {
 		const map = new Map<number, string>();
@@ -340,11 +507,6 @@ export default function WinMilestonePage() {
 
 	function moveMonth(offset: number): void {
 		setViewMonth((current) => addMonths(current, offset));
-	}
-
-	function refreshData(): void {
-		void loadMetadata(true);
-		void loadMonthActivities(viewMonth);
 	}
 
 	return (
@@ -480,8 +642,12 @@ export default function WinMilestonePage() {
 												</th>
 
 												{dateKeys.map((key) => {
-													const rows = relationMap.get(`${tag.tag_id}|${key}`) ?? [];
-													const cell = buildCellState(rows, activityPointById);
+													const cell = matrixCellMap
+														? (matrixCellMap.get(`${tag.tag_id}|${key}`) ?? { kind: 'missing' })
+														: buildCellState(
+															relationMap.get(`${tag.tag_id}|${key}`) ?? [],
+															activityPointById,
+														);
 
 													return (
 														<td key={`cell-${tag.tag_id}-${key}`} className="min-w-12">

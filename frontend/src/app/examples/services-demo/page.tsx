@@ -3,6 +3,7 @@ import { actionsService } from '@/services/actionsService';
 import { activitiesService } from '@/services/activitiesService';
 import { CreateActivityForm } from './CreateActivityForm';
 import { DurationServiceExamples } from './DurationServiceExamples';
+import { TemplatesServiceExamples } from './TemplatesServiceExamples';
 
 function isRenderableActivity(value: Activity | null | undefined): value is Activity {
 	if (!value || typeof value !== 'object') {
@@ -105,6 +106,7 @@ export default async function ServicesDemoPage() {
 				</div>
 
 				<DurationServiceExamples actions={actions} actionsLoadError={actionsLoadError} />
+				<TemplatesServiceExamples />
 			</section>
 		</main>
 	);

@@ -51,6 +51,28 @@ export default function DurationActionDetailPage() {
 		return [...expeditions].sort((left, right) => right.expedition_id - left.expedition_id);
 	}, [expeditions]);
 
+	function applyChangedActionAverage(changedActions?: Array<{ action_id: number; average_duration?: string | null; 'durasi rata-rata'?: string | null }>): void {
+		if (!action || !Array.isArray(changedActions)) {
+			return;
+		}
+
+		const changed = changedActions.find((item) => item.action_id === action.action_id);
+		if (!changed) {
+			return;
+		}
+
+		const nextAverageDuration = changed['durasi rata-rata'] ?? changed.average_duration ?? null;
+		setAction((current) =>
+			current
+				? {
+					...current,
+					'durasi rata-rata': nextAverageDuration,
+					average_duration: nextAverageDuration,
+				}
+				: current,
+		);
+	}
+
 	const loadData = useCallback(async (): Promise<void> => {
 		if (!isActionIdValid) {
 			setLoadError('Parameter action id tidak valid.');
@@ -66,7 +88,12 @@ export default function DurationActionDetailPage() {
 		try {
 			const [actionResponse, expeditionsResponse] = await Promise.all([
 				actionsService.getById(actionId),
-				expeditionsService.list({ action_id: actionId }),
+				expeditionsService.list({
+					action_id: actionId,
+					page: 1,
+					per_page: 500,
+					fields: ['expedition_id', 'action_id', 'duration'],
+				}),
 			]);
 
 			setAction(actionResponse.data);
@@ -166,11 +193,21 @@ export default function DurationActionDetailPage() {
 			const response = await expeditionsService.create({
 				action_id: action.action_id,
 				duration: normalizedDuration,
+			}, {
+				includeSnapshot: true,
 			});
 
 			setNewDuration('01:30:00');
 			setNotice(response.message);
-			await loadData();
+
+			const snapshotExpeditions = response.meta?.snapshot?.expeditions;
+			if (Array.isArray(snapshotExpeditions)) {
+				setExpeditions(snapshotExpeditions);
+			} else {
+				setExpeditions((current) => [...current, response.data]);
+			}
+
+			applyChangedActionAverage(response.meta?.changed_actions);
 		} catch (error) {
 			if (error instanceof ApiError && error.status === 422) {
 				const fieldErrors = getFieldErrors(error, 'duration');
@@ -212,11 +249,25 @@ export default function DurationActionDetailPage() {
 		try {
 			const response = await expeditionsService.update(expeditionId, {
 				duration: normalizedDuration,
+			}, {
+				includeSnapshot: true,
 			});
 
 			setNotice(response.message);
+
+			const snapshotExpeditions = response.meta?.snapshot?.expeditions;
+			if (Array.isArray(snapshotExpeditions)) {
+				setExpeditions(snapshotExpeditions);
+			} else {
+				setExpeditions((current) =>
+					current.map((item) =>
+						item.expedition_id === response.data.expedition_id ? response.data : item,
+					),
+				);
+			}
+
+			applyChangedActionAverage(response.meta?.changed_actions);
 			cancelEditExpedition();
-			await loadData();
 		} catch (error) {
 			if (error instanceof ApiError && error.status === 422) {
 				const fieldErrors = getFieldErrors(error, 'duration');
@@ -239,12 +290,24 @@ export default function DurationActionDetailPage() {
 		setNotice(null);
 
 		try {
-			const response = await expeditionsService.remove(expeditionId);
+			const response = await expeditionsService.remove(expeditionId, {
+				includeSnapshot: true,
+			});
 			setNotice(response.message);
+
+			const snapshotExpeditions = response.meta?.snapshot?.expeditions;
+			if (Array.isArray(snapshotExpeditions)) {
+				setExpeditions(snapshotExpeditions);
+			} else {
+				setExpeditions((current) =>
+					current.filter((item) => item.expedition_id !== expeditionId),
+				);
+			}
+
+			applyChangedActionAverage(response.meta?.changed_actions);
 			if (editingExpeditionId === expeditionId) {
 				cancelEditExpedition();
 			}
-			await loadData();
 		} catch (error) {
 			setNotice(getErrorMessage(error));
 		} finally {

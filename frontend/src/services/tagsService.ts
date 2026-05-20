@@ -6,11 +6,13 @@ import type {
 	ApiMutationResponse,
 	Tag,
 	TagCreatePayload,
+	TagListQuery,
 	TagPatchPayload,
 	TagPutPayload,
 } from '@/lib/api/types';
 
 const TAGS_ENDPOINT = '/api/tags';
+const MAX_LIST_PER_PAGE = 200;
 
 function assertPositiveInteger(name: string, value: number): void {
 	if (!Number.isInteger(value) || value <= 0) {
@@ -18,8 +20,36 @@ function assertPositiveInteger(name: string, value: number): void {
 	}
 }
 
-async function list(): Promise<ApiListResponse<Tag>> {
-	return httpClient.get<ApiListResponse<Tag>>(TAGS_ENDPOINT);
+function normalizeListQuery(query?: TagListQuery): TagListQuery | undefined {
+	if (!query) {
+		return query;
+	}
+
+	const normalizedQuery: TagListQuery = { ...query };
+
+	if (
+		typeof normalizedQuery.per_page === 'number' &&
+		normalizedQuery.per_page > MAX_LIST_PER_PAGE
+	) {
+		normalizedQuery.per_page = MAX_LIST_PER_PAGE;
+	}
+
+	if (Array.isArray(normalizedQuery.fields)) {
+		const fields = normalizedQuery.fields
+			.map((field) => field.trim())
+			.filter((field) => field.length > 0)
+			.join(',');
+
+		normalizedQuery.fields = fields || undefined;
+	}
+
+	return normalizedQuery;
+}
+
+async function list(query?: TagListQuery): Promise<ApiListResponse<Tag>> {
+	return httpClient.get<ApiListResponse<Tag>>(TAGS_ENDPOINT, {
+		query: normalizeListQuery(query),
+	});
 }
 
 async function getById(tagId: number): Promise<ApiItemResponse<Tag>> {

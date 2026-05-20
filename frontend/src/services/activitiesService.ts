@@ -2,6 +2,7 @@ import { httpClient } from '@/lib/api/httpClient';
 import type {
 	Activity,
 	ActivityCreatePayload,
+	ActivityListQuery,
 	ActivityPatchPayload,
 	ActivityPutPayload,
 	ApiDeleteResponse,
@@ -24,8 +25,8 @@ function assertMonth(month: number): void {
 	}
 }
 
-async function list(): Promise<ApiListResponse<Activity>> {
-	return httpClient.get<ApiListResponse<Activity>>(ACTIVITIES_ENDPOINT);
+async function list(query?: ActivityListQuery): Promise<ApiListResponse<Activity>> {
+	return httpClient.get<ApiListResponse<Activity>>(ACTIVITIES_ENDPOINT, { query });
 }
 
 async function listByDate(date: string): Promise<ApiListResponse<Activity>> {

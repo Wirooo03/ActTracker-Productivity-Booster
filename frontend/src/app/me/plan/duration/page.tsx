@@ -21,6 +21,7 @@ export default function DurationActionsPage() {
 	const [isLoading, setIsLoading] = useState(true);
 	const [loadError, setLoadError] = useState<string | null>(null);
 	const [notice, setNotice] = useState<string | null>(null);
+	const [actionsSearchQuery, setActionsSearchQuery] = useState('');
 
 	const [newActionName, setNewActionName] = useState('');
 	const [createActionError, setCreateActionError] = useState<string | null>(null);
@@ -43,7 +44,11 @@ export default function DurationActionsPage() {
 		setLoadError(null);
 
 		try {
-			const response = await actionsService.list();
+			const response = await actionsService.list({
+				search: actionsSearchQuery.trim() || undefined,
+				page: 1,
+				fields: ['action_id', 'action_name', 'durasi rata-rata'],
+			});
 			setActions(response.data);
 		} catch (error) {
 			setLoadError(getErrorMessage(error));
@@ -51,7 +56,7 @@ export default function DurationActionsPage() {
 		} finally {
 			setIsLoading(false);
 		}
-	}, []);
+	}, [actionsSearchQuery]);
 
 	useEffect(() => {
 		void loadActions();
@@ -76,7 +81,7 @@ export default function DurationActionsPage() {
 
 			setNewActionName('');
 			setNotice(response.message);
-			await loadActions();
+			setActions((current) => [...current, response.data]);
 		} catch (error) {
 			if (error instanceof ApiError && error.status === 422) {
 				const fieldErrors = getFieldErrors(error, 'action_name');
@@ -117,8 +122,12 @@ export default function DurationActionsPage() {
 			});
 
 			setNotice(response.message);
+			setActions((current) =>
+				current.map((action) =>
+					action.action_id === response.data.action_id ? response.data : action,
+				),
+			);
 			cancelEditAction();
-			await loadActions();
 		} catch (error) {
 			setNotice(getErrorMessage(error));
 		} finally {
@@ -137,10 +146,10 @@ export default function DurationActionsPage() {
 		try {
 			const response = await actionsService.remove(actionId);
 			setNotice(response.message);
+			setActions((current) => current.filter((action) => action.action_id !== actionId));
 			if (editingActionId === actionId) {
 				cancelEditAction();
 			}
-			await loadActions();
 		} catch (error) {
 			setNotice(getErrorMessage(error));
 		} finally {
@@ -189,7 +198,31 @@ export default function DurationActionsPage() {
 				[actionId]: '',
 			}));
 			setNotice(response.message);
-			await loadActions();
+
+			const changedActions = response.meta?.changed_actions;
+			if (Array.isArray(changedActions) && changedActions.length > 0) {
+				setActions((current) =>
+					current.map((action) => {
+						const changed = changedActions.find(
+							(item) => item.action_id === action.action_id,
+						);
+						if (!changed) {
+							return action;
+						}
+
+						const nextAverageDuration =
+							changed['durasi rata-rata'] ?? changed.average_duration ?? null;
+
+						return {
+							...action,
+							'durasi rata-rata': nextAverageDuration,
+							average_duration: nextAverageDuration,
+						};
+					}),
+				);
+			} else {
+				await loadActions();
+			}
 		} catch (error) {
 			if (error instanceof ApiError && error.status === 422) {
 				const fieldErrors = getFieldErrors(error, 'duration');
@@ -285,6 +318,19 @@ export default function DurationActionsPage() {
 							</button>
 						</div>
 					) : null}
+
+					<div className="mt-3 rounded-2xl border border-zinc-700 bg-zinc-950/60 p-3">
+						<label className="block text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+							Cari action (server-side)
+							<input
+								type="text"
+								value={actionsSearchQuery}
+								onChange={(event) => setActionsSearchQuery(event.target.value)}
+								placeholder="Ketik nama action..."
+								className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-normal text-zinc-100 outline-none transition focus:border-cyan-500"
+							/>
+						</label>
+					</div>
 
 					<div className="mt-3 space-y-2">
 						{isLoading ? (

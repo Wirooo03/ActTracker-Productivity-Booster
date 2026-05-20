@@ -1,8 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getActivitiesByMonth, type Activity } from '@/lib/activities-api';
+import { isApiError } from '@/lib/api/apiError';
+import type { Activity, WinPointsSeriesPoint } from '@/lib/api/types';
+import { activitiesService } from '@/services/activitiesService';
+import { winService } from '@/services/winService';
 
 type CalendarCell = {
 	date: Date;
@@ -28,7 +31,6 @@ const TREND_RANGE_OPTIONS: Array<{ value: TrendRangeValue; label: string }> = [
 	{ value: 'all', label: 'All time' },
 ];
 
-const ALL_TIME_EMPTY_MONTH_STOP = 12;
 const ALL_TIME_MAX_LOOKBACK_MONTHS = 240;
 
 const monthTitleFormatter = new Intl.DateTimeFormat('id-ID', {
@@ -62,10 +64,6 @@ function dateKey(date: Date): string {
 	const month = String(date.getMonth() + 1).padStart(2, '0');
 	const day = String(date.getDate()).padStart(2, '0');
 	return `${year}-${month}-${day}`;
-}
-
-function monthKey(year: number, month: number): string {
-	return `${year}-${String(month).padStart(2, '0')}`;
 }
 
 function addDays(date: Date, amount: number): Date {
@@ -114,29 +112,6 @@ function rangeStartFromSelection(range: Exclude<TrendRangeValue, 'all'>, today: 
 	}
 }
 
-function parseActivityDate(activityDate: string): Date | null {
-	const rawKey = extractDateKey(activityDate);
-	if (!/^\d{4}-\d{2}-\d{2}$/.test(rawKey)) {
-		return null;
-	}
-
-	const [yearText, monthText, dayText] = rawKey.split('-');
-	const year = Number(yearText);
-	const month = Number(monthText) - 1;
-	const day = Number(dayText);
-
-	if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
-		return null;
-	}
-
-	const parsed = new Date(year, month, day);
-	if (parsed.getFullYear() !== year || parsed.getMonth() !== month || parsed.getDate() !== day) {
-		return null;
-	}
-
-	return startOfDay(parsed);
-}
-
 function listMonthSpan(startDate: Date, endDate: Date): Array<{ year: number; month: number }> {
 	const startMonth = startOfMonth(startDate);
 	const endMonth = startOfMonth(endDate);
@@ -176,26 +151,22 @@ function buildPath(points: Array<{ x: number; y: number }>): string {
 		.join(' ');
 }
 
-function extractDateKey(activityDate: string): string {
-	const matched = activityDate.match(/^\d{4}-\d{2}-\d{2}/);
-	if (matched) {
-		return matched[0];
-	}
-
-	const parsed = new Date(activityDate);
-	if (Number.isNaN(parsed.getTime())) {
-		return activityDate;
-	}
-
-	return dateKey(parsed);
-}
-
 function buildPointMap(activities: Activity[]): Record<string, number> {
 	const totals: Record<string, number> = {};
 
 	for (const activity of activities) {
-		const key = extractDateKey(activity.activity_date);
+		const key = activity.activity_date.slice(0, 10);
 		totals[key] = (totals[key] ?? 0) + activity.activity_point;
+	}
+
+	return totals;
+}
+
+function buildPointMapFromSeries(points: WinPointsSeriesPoint[]): Record<string, number> {
+	const totals: Record<string, number> = {};
+
+	for (const point of points) {
+		totals[point.date] = point.total_point;
 	}
 
 	return totals;
@@ -204,12 +175,12 @@ function buildPointMap(activities: Activity[]): Record<string, number> {
 export default function WinProgressPage() {
 	const router = useRouter();
 	const today = useMemo(() => startOfDay(new Date()), []);
-	const monthCacheRef = useRef<Map<string, Activity[]>>(new Map());
 	const [viewMonth, setViewMonth] = useState(
 		() => new Date(today.getFullYear(), today.getMonth(), 1),
 	);
 	const [selectedDate, setSelectedDate] = useState(today);
 	const [trendRange, setTrendRange] = useState<TrendRangeValue>('1m');
+	const [isPointsSeriesSupported, setIsPointsSeriesSupported] = useState(true);
 	const [trendSeries, setTrendSeries] = useState<TrendPoint[]>([]);
 	const [isTrendLoading, setIsTrendLoading] = useState(false);
 	const [trendError, setTrendError] = useState<string | null>(null);
@@ -217,36 +188,65 @@ export default function WinProgressPage() {
 	const [isMonthLoading, setIsMonthLoading] = useState(false);
 	const [monthError, setMonthError] = useState<string | null>(null);
 
-	const getMonthActivitiesCached = useCallback(async (year: number, month: number): Promise<Activity[]> => {
-		const key = monthKey(year, month);
-		const cached = monthCacheRef.current.get(key);
-		if (cached) {
-			return cached;
-		}
+	const loadMonthPointsLegacy = useCallback(async (monthDate: Date): Promise<Record<string, number>> => {
+		const response = await activitiesService.listByMonth(
+			monthDate.getFullYear(),
+			monthDate.getMonth() + 1,
+		);
 
-		const response = await getActivitiesByMonth(year, month);
-		monthCacheRef.current.set(key, response.data);
-		return response.data;
+		return buildPointMap(response.data);
 	}, []);
+
+	const loadRangePointsLegacy = useCallback(
+		async (startDate: Date, endDate: Date): Promise<Record<string, number>> => {
+			const monthSpan = listMonthSpan(startDate, endDate);
+			const monthData = await Promise.all(
+				monthSpan.map(({ year, month }) => activitiesService.listByMonth(year, month)),
+			);
+
+			return buildPointMap(monthData.flatMap((response) => response.data));
+		},
+		[],
+	);
 
 	useEffect(() => {
 		let isCurrent = true;
 
-		async function loadMonthActivities(): Promise<void> {
+		async function loadMonthPoints(): Promise<void> {
 			setIsMonthLoading(true);
 			setMonthError(null);
 
 			try {
-				const monthActivities = await getMonthActivitiesCached(
-					viewMonth.getFullYear(),
-					viewMonth.getMonth() + 1,
-				);
+				const monthStart = startOfMonth(viewMonth);
+				const monthEnd = addDays(addMonths(monthStart, 1), -1);
+				let pointMap: Record<string, number>;
+
+				if (isPointsSeriesSupported !== false) {
+					try {
+						const response = await winService.getPointsSeries({
+							from: dateKey(monthStart),
+							to: dateKey(monthEnd),
+						});
+
+						pointMap = buildPointMapFromSeries(response.data);
+						setIsPointsSeriesSupported(true);
+					} catch (error) {
+						if (isApiError(error) && (error.status === 404 || error.status === 405)) {
+							setIsPointsSeriesSupported(false);
+							pointMap = await loadMonthPointsLegacy(viewMonth);
+						} else {
+							throw error;
+						}
+					}
+				} else {
+					pointMap = await loadMonthPointsLegacy(viewMonth);
+				}
 
 				if (!isCurrent) {
 					return;
 				}
 
-				setMonthPointMap(buildPointMap(monthActivities));
+				setMonthPointMap(pointMap);
 			} catch (error) {
 				if (!isCurrent) {
 					return;
@@ -265,12 +265,12 @@ export default function WinProgressPage() {
 			}
 		}
 
-		void loadMonthActivities();
+		void loadMonthPoints();
 
 		return () => {
 			isCurrent = false;
 		};
-	}, [getMonthActivitiesCached, viewMonth]);
+	}, [isPointsSeriesSupported, loadMonthPointsLegacy, viewMonth]);
 
 	useEffect(() => {
 		let isCurrent = true;
@@ -284,51 +284,37 @@ export default function WinProgressPage() {
 				let trendStart = trendEnd;
 
 				if (trendRange === 'all') {
-					let foundAny = false;
-					let emptyStreak = 0;
-					let earliestDate = trendEnd;
-
-					for (let index = 0; index < ALL_TIME_MAX_LOOKBACK_MONTHS; index += 1) {
-						const cursorMonth = addMonths(startOfMonth(trendEnd), -index);
-						const monthActivities = await getMonthActivitiesCached(
-							cursorMonth.getFullYear(),
-							cursorMonth.getMonth() + 1,
-						);
-
-						if (monthActivities.length > 0) {
-							foundAny = true;
-							emptyStreak = 0;
-
-							for (const activity of monthActivities) {
-								const parsed = parseActivityDate(activity.activity_date);
-								if (parsed && parsed < earliestDate) {
-									earliestDate = parsed;
-								}
-							}
-						} else if (foundAny) {
-							emptyStreak += 1;
-							if (emptyStreak >= ALL_TIME_EMPTY_MONTH_STOP) {
-								break;
-							}
-						}
-					}
-
-					trendStart = foundAny ? earliestDate : addDays(trendEnd, -6);
+					trendStart = addMonths(startOfMonth(trendEnd), -(ALL_TIME_MAX_LOOKBACK_MONTHS - 1));
 				} else {
 					trendStart = rangeStartFromSelection(trendRange, trendEnd);
 				}
 
-				const monthSpan = listMonthSpan(trendStart, trendEnd);
-				const monthData = await Promise.all(
-					monthSpan.map(({ year, month }) => getMonthActivitiesCached(year, month)),
-				);
+				let pointMap: Record<string, number>;
+				if (isPointsSeriesSupported !== false) {
+					try {
+						const response = await winService.getPointsSeries({
+							from: dateKey(trendStart),
+							to: dateKey(trendEnd),
+						});
+
+						pointMap = buildPointMapFromSeries(response.data);
+						setIsPointsSeriesSupported(true);
+					} catch (error) {
+						if (isApiError(error) && (error.status === 404 || error.status === 405)) {
+							setIsPointsSeriesSupported(false);
+							pointMap = await loadRangePointsLegacy(trendStart, trendEnd);
+						} else {
+							throw error;
+						}
+					}
+				} else {
+					pointMap = await loadRangePointsLegacy(trendStart, trendEnd);
+				}
 
 				if (!isCurrent) {
 					return;
 				}
 
-				const mergedActivities = monthData.flat();
-				const pointMap = buildPointMap(mergedActivities);
 				setTrendSeries(buildTrendSeries(trendStart, trendEnd, pointMap));
 			} catch (error) {
 				if (!isCurrent) {
@@ -351,7 +337,7 @@ export default function WinProgressPage() {
 		return () => {
 			isCurrent = false;
 		};
-	}, [getMonthActivitiesCached, today, trendRange]);
+	}, [isPointsSeriesSupported, loadRangePointsLegacy, today, trendRange]);
 
 	const todayKey = dateKey(today);
 	const selectedDateKey = dateKey(selectedDate);

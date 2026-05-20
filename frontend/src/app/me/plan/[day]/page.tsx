@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ApiError, getFieldErrors } from '@/lib/api/apiError';
+import { ApiError, getFieldErrors, isApiError } from '@/lib/api/apiError';
 import {
 	durationHHMMSSToSeconds,
 	normalizeDurationHHMMSS,
@@ -14,6 +14,7 @@ import {
 import type { Action, Block, BlockCreatePayload } from '@/lib/api/types';
 import { actionsService } from '@/services/actionsService';
 import { blocksService } from '@/services/blocksService';
+import { planService } from '@/services/planService';
 
 type DurationSource = 'custom' | 'action';
 
@@ -60,6 +61,7 @@ const FALLBACK_TIMELINE_WIDTH = 960;
 const MIN_TIMELINE_ZOOM = 1;
 const MAX_TIMELINE_ZOOM = 10;
 const TIMELINE_ZOOM_STEP = 0.5;
+const DEFAULT_TIMELINE_ZOOM = 2;
 const COMPACT_DETAIL_MIN_WIDTH = 96;
 const FULL_DETAIL_MIN_WIDTH = 150;
 
@@ -525,11 +527,13 @@ export default function PlanDayPage() {
 	const [isSavingBlockId, setIsSavingBlockId] = useState<number | null>(null);
 	const [isDeletingBlockId, setIsDeletingBlockId] = useState<number | null>(null);
 	const [timelineViewportWidth, setTimelineViewportWidth] = useState(0);
-	const [timelineZoom, setTimelineZoom] = useState(1);
+	const [timelineZoom, setTimelineZoom] = useState(DEFAULT_TIMELINE_ZOOM);
+	const [isPlanBootstrapSupported, setIsPlanBootstrapSupported] = useState(true);
 	const [nowTimestamp, setNowTimestamp] = useState(() => Date.now());
 	const timelineViewportRef = useRef<HTMLDivElement | null>(null);
 	const timelineCanvasRef = useRef<HTMLDivElement | null>(null);
 	const pendingZoomAnchorMinuteRef = useRef<number | null>(null);
+	const hasAutoCenteredTimelineRef = useRef(false);
 
 	const actionsById = useMemo(() => {
 		return new Map(actions.map((action) => [action.action_id, action]));
@@ -768,6 +772,31 @@ export default function PlanDayPage() {
 		);
 	}, [timelineLayout]);
 
+	const centerTimelineAtMinute = useCallback(
+		(targetMinute: number): void => {
+			const viewport = timelineViewportRef.current;
+			const canvas = timelineCanvasRef.current;
+
+			if (!viewport || !canvas) {
+				return;
+			}
+
+			const clampedMinute = Math.min(
+				Math.max(targetMinute, timelineLayout.minStartMinute),
+				timelineLayout.maxEndMinute,
+			);
+
+			const anchorX =
+				CANVAS_PADDING_X +
+				(clampedMinute - timelineLayout.minStartMinute) * timelineLayout.pixelsPerMinute;
+			const targetScrollLeft = canvas.offsetLeft + anchorX - viewport.clientWidth / 2;
+			const maxScrollLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
+
+			viewport.scrollLeft = Math.min(Math.max(0, targetScrollLeft), maxScrollLeft);
+		},
+		[timelineLayout.maxEndMinute, timelineLayout.minStartMinute, timelineLayout.pixelsPerMinute],
+	);
+
 	const updateTimelineZoom = useCallback(
 		(nextZoom: number): void => {
 			const clampedZoom = clampTimelineZoom(nextZoom);
@@ -854,9 +883,27 @@ export default function PlanDayPage() {
 		setLoadError(null);
 
 		try {
+			if (isPlanBootstrapSupported !== false) {
+				try {
+					const bootstrapResponse = await planService.getDayBootstrap(dayKey);
+					setBlocks(bootstrapResponse.data.blocks);
+					setActions(bootstrapResponse.data.actions as Action[]);
+					setIsPlanBootstrapSupported(true);
+					return;
+				} catch (error) {
+					if (isApiError(error) && (error.status === 404 || error.status === 405)) {
+						setIsPlanBootstrapSupported(false);
+					} else {
+						throw error;
+					}
+				}
+			}
+
 			const [blocksResponse, actionsResponse] = await Promise.all([
 				blocksService.listByDate(dayKey),
-				actionsService.list(),
+				actionsService.list({
+					fields: ['action_id', 'action_name', 'durasi rata-rata'],
+				}),
 			]);
 
 			setBlocks(blocksResponse.data);
@@ -868,7 +915,7 @@ export default function PlanDayPage() {
 		} finally {
 			setIsLoading(false);
 		}
-	}, [dayKey, isDayValid]);
+	}, [dayKey, isDayValid, isPlanBootstrapSupported]);
 
 	useEffect(() => {
 		void loadData();
@@ -913,29 +960,41 @@ export default function PlanDayPage() {
 		};
 	}, []);
 
+	useEffect(() => {
+		hasAutoCenteredTimelineRef.current = false;
+	}, [dayKey]);
+
+	useLayoutEffect(() => {
+		if (hasAutoCenteredTimelineRef.current) {
+			return;
+		}
+
+		const viewport = timelineViewportRef.current;
+		const canvas = timelineCanvasRef.current;
+		if (!viewport || !canvas || !timelineLayout.hasValid) {
+			return;
+		}
+
+		const now = new Date();
+		const nowMinute = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+		centerTimelineAtMinute(nowMinute);
+		hasAutoCenteredTimelineRef.current = true;
+	}, [centerTimelineAtMinute, timelineLayout.hasValid]);
+
 	useLayoutEffect(() => {
 		const anchorMinute = pendingZoomAnchorMinuteRef.current;
 		if (anchorMinute === null) {
 			return;
 		}
 
-		const viewport = timelineViewportRef.current;
-		const canvas = timelineCanvasRef.current;
-
-		if (!viewport || !canvas || !timelineLayout.hasValid) {
+		if (!timelineLayout.hasValid) {
 			pendingZoomAnchorMinuteRef.current = null;
 			return;
 		}
 
-		const anchorX =
-			CANVAS_PADDING_X +
-			(anchorMinute - timelineLayout.minStartMinute) * timelineLayout.pixelsPerMinute;
-		const targetScrollLeft = canvas.offsetLeft + anchorX - viewport.clientWidth / 2;
-		const maxScrollLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
-
-		viewport.scrollLeft = Math.min(Math.max(0, targetScrollLeft), maxScrollLeft);
+		centerTimelineAtMinute(anchorMinute);
 		pendingZoomAnchorMinuteRef.current = null;
-	}, [timelineLayout]);
+	}, [centerTimelineAtMinute, timelineLayout.hasValid]);
 
 	useEffect(() => {
 		if (!isDayValid) {
@@ -1076,13 +1135,27 @@ export default function PlanDayPage() {
 		setIsCreating(true);
 
 		try {
-			const response = await blocksService.create(payloadResult.payload);
+			const response = await blocksService.create(payloadResult.payload, {
+				includeSnapshot: true,
+			});
+
+			const snapshotBlocks = response.meta?.snapshot?.blocks;
+			if (Array.isArray(snapshotBlocks)) {
+				setBlocks(snapshotBlocks.filter((block) => block.date === dayKey));
+			} else {
+				setBlocks((current) => {
+					const withoutCreated = current.filter(
+						(block) => block.block_id !== response.data.block_id,
+					);
+					return [...withoutCreated, response.data];
+				});
+			}
+
 			setNotice({
 				type: 'success',
 				text: `${response.message} Durasi: ${payloadResult.durationSummary}.`,
 			});
 			setCreateForm(createInitialForm(createForm.startTime));
-			await loadData();
 		} catch (error) {
 			if (error instanceof ApiError && error.status === 422) {
 				const firstFieldError =
@@ -1127,13 +1200,26 @@ export default function PlanDayPage() {
 		setIsSavingBlockId(blockId);
 
 		try {
-			const response = await blocksService.update(blockId, payloadResult.payload);
+			const response = await blocksService.update(blockId, payloadResult.payload, {
+				includeSnapshot: true,
+			});
+
+			const snapshotBlocks = response.meta?.snapshot?.blocks;
+			if (Array.isArray(snapshotBlocks)) {
+				setBlocks(snapshotBlocks.filter((block) => block.date === dayKey));
+			} else {
+				setBlocks((current) =>
+					current.map((block) =>
+						block.block_id === response.data.block_id ? response.data : block,
+					),
+				);
+			}
+
 			setNotice({
 				type: 'success',
 				text: `${response.message} Durasi: ${payloadResult.durationSummary}.`,
 			});
 			cancelEditing();
-			await loadData();
 		} catch (error) {
 			if (error instanceof ApiError && error.status === 422) {
 				const firstFieldError =
@@ -1163,12 +1249,23 @@ export default function PlanDayPage() {
 		setNotice(null);
 
 		try {
-			const response = await blocksService.remove(blockId);
+			const response = await blocksService.remove(blockId, {
+				includeSnapshot: true,
+			});
+
+			const snapshotBlocks = response.meta?.snapshot?.blocks;
+			if (Array.isArray(snapshotBlocks)) {
+				setBlocks(snapshotBlocks.filter((block) => block.date === dayKey));
+			} else {
+				setBlocks((current) =>
+					current.filter((block) => block.block_id !== blockId),
+				);
+			}
+
 			if (editingBlockId === blockId) {
 				cancelEditing();
 			}
 			setNotice({ type: 'info', text: response.message });
-			await loadData();
 		} catch (error) {
 			setNotice({ type: 'error', text: getErrorMessage(error) });
 		} finally {
@@ -1339,7 +1436,8 @@ export default function PlanDayPage() {
 									<label className="text-xs text-zinc-400 sm:col-span-2">
 										Durasi custom
 										<input
-											type="text"
+											type="time"
+											step={1}
 											value={createForm.customDuration}
 											onChange={(event) =>
 												setCreateForm((current) => ({
@@ -1347,9 +1445,11 @@ export default function PlanDayPage() {
 													customDuration: event.target.value,
 												}))
 											}
-											placeholder="Contoh: 01:30:00 atau 01:30"
-											className="mt-1 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none transition focus:border-cyan-500"
+											className="mt-1 w-full max-w-[12rem] rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none transition focus:border-cyan-500"
 										/>
+										<p className="mt-1 text-[11px] text-zinc-500">
+											Durasi bisa diketik manual atau dipilih dari picker waktu.
+										</p>
 									</label>
 								) : (
 									<label className="text-xs text-zinc-400 sm:col-span-2">
@@ -1519,9 +1619,9 @@ export default function PlanDayPage() {
 							<button
 								type="button"
 								onClick={() => {
-									updateTimelineZoom(1);
+									updateTimelineZoom(DEFAULT_TIMELINE_ZOOM);
 								}}
-								disabled={timelineZoom === 1}
+								disabled={timelineZoom === DEFAULT_TIMELINE_ZOOM}
 								className="rounded-md border border-zinc-700 bg-zinc-800/70 px-2 py-1 font-semibold text-zinc-100 transition hover:border-zinc-500 hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-60"
 							>
 								Reset
@@ -1809,7 +1909,8 @@ export default function PlanDayPage() {
 								<label className="text-xs text-cyan-100 sm:col-span-2">
 									Durasi custom
 									<input
-										type="text"
+										type="time"
+										step={1}
 										value={editForm.customDuration}
 										onChange={(event) =>
 											setEditForm((current) =>
@@ -1821,8 +1922,11 @@ export default function PlanDayPage() {
 													: current,
 											)
 										}
-										className="mt-1 w-full rounded-xl border border-cyan-700/70 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none"
+										className="mt-1 w-full max-w-[12rem] rounded-xl border border-cyan-700/70 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none"
 									/>
+									<p className="mt-1 text-[11px] text-cyan-200/80">
+										Durasi bisa diketik manual atau dipilih dari picker waktu.
+									</p>
 								</label>
 							) : (
 								<label className="text-xs text-cyan-100 sm:col-span-2">
